@@ -51,6 +51,9 @@
             - text:
                 credential-id: LT_QCOM_CLO_TOKEN
                 variable: LT_QCOM_CLO_TOKEN
+        - ssh-agent-credentials:
+            users:
+                - 'LT_QUALCOMM_PRIVATE_KEY_SSH'
     builders:
         - shell: |
             #!/bin/bash
@@ -81,16 +84,22 @@
             export GIT_TRACE_PACKET=true
             export GIT_TRACE=true
 
+            # create parent folder
+            mkdir -p {type}
+
             # qualcomm' staging git-clone checks
             if [ "{type}" == "ssh" ]; then
-            git clone --verbose --depth 1 git@{staging_git}:${{INTEGRATION_REPO_URL}}
-            git clone --verbose --depth 1 git@{staging_git}:${{KERNEL_CI_REPO_URL}}
-            git clone --verbose --depth 1 git@{staging_git}:${{QCOM_SECTOOLS_GIT}}
+            (cd {type}; git clone --verbose --depth 1 git@{staging_git}:${{INTEGRATION_REPO_URL}})
+            (cd {type}; git clone --verbose --depth 1 git@{staging_git}:${{KERNEL_CI_REPO_URL}})
+            (cd {type}; git clone --verbose --depth 1 git@{staging_git}:${{QCOM_SECTOOLS_GIT}})
             else
-            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{INTEGRATION_REPO_URL}}
-            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{KERNEL_CI_REPO_URL}}
-            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{QCOM_SECTOOLS_GIT}}
+            (cd {type}; git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{INTEGRATION_REPO_URL}})
+            (cd {type}; git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{KERNEL_CI_REPO_URL}})
+            (cd {type}; git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{QCOM_SECTOOLS_GIT}})
             fi
+
+            # remove parent folder
+            rm -rf {type}
 
             # publish artifacts
             src=${{JOB_NAME}}.${{BUILD_NUMBER}}

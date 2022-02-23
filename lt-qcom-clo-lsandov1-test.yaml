@@ -40,8 +40,8 @@
         - string:
             name: PUBLISH_SERVER
             default: 'https://{staging_artifacts}/artifactory/codelinaro-qualcomm/'
-    disabled: true
-    node: docker-buster-amd64
+    disabled: false
+    node: master
     wrappers:
         - timestamps
         - credentials-binding:
@@ -51,16 +51,13 @@
             - text:
                 credential-id: LT_QCOM_CLO_TOKEN
                 variable: LT_QCOM_CLO_TOKEN
-        - ssh-agent-credentials:
-            users:
-                - 'LT_QUALCOMM_PRIVATE_KEY_SSH'
     builders:
-        - shell:
-            !include-raw: lt-qcom-linux/builders-deps.sh
         - shell: |
             #!/bin/bash
             export PS4='# ${{BASH_SOURCE}}:${{LINENO}}: ${{FUNCNAME[0]}}() - [${{SHLVL}},${{BASH_SUBSHELL}},$?] '
             set -ex
+
+            (mkdir -p $HOME/bin && cd $HOME/bin && curl -fL https://getcli.jfrog.io | sh)
 
             # setup ssh for CLO
             git config --global user.name 'Linaro CI'

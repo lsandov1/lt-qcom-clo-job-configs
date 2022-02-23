@@ -1,0 +1,104 @@
+- project:
+    name: trigger-lt-qcom-clo-lsandov1-test
+    staging_git: staging-git.codelinaro.org
+    staging_artifacts: staging-artifacts.codelinaro.org
+    user: qclt-bot
+    jobs:
+        - 'lt-qcom-clo-lsandov1-test-{num}':
+            type: https
+            num: 1
+        - 'lt-qcom-clo-lsandov1-test-{num}':
+            type: ssh
+            num: 2
+
+- job-template:
+    name: 'lt-qcom-clo-lsandov1-test-{num}'
+    project-type: freestyle
+    defaults: global
+    properties:
+        - authorization:
+            anonymous:
+                - job-read
+                - job-extended-read
+            leonardo.sandoval@linaro.org:
+                - job-build
+                - job-cancel
+        - build-discarder:
+            days-to-keep: 30
+            num-to-keep: 30
+            artifact-num-to-keep: 1
+    parameters:
+        - string:
+            name: INTEGRATION_REPO_URL
+            default: 'linaro/landing-teams/qualcomm/kernel-integration.git'
+        - string:
+            name: KERNEL_CI_REPO_URL
+            default: 'linaro/landing-teams/qualcomm/kernel.git'
+        - string:
+            name: QCOM_SECTOOLS_GIT
+            default: 'linaro/landing-teams/qualcomm/sectools.git'
+        - string:
+            name: PUBLISH_SERVER
+            default: 'https://{staging_artifacts}/artifactory/codelinaro-qualcomm/'
+    disabled: true
+    node: docker-buster-amd64
+    wrappers:
+        - timestamps
+        - credentials-binding:
+            - text:
+                credential-id: LT_QCOM_CLO_API_KEY
+                variable: LT_QCOM_CLO_API_KEY
+            - text:
+                credential-id: LT_QCOM_CLO_TOKEN
+                variable: LT_QCOM_CLO_TOKEN
+        - ssh-agent-credentials:
+            users:
+                - 'LT_QUALCOMM_PRIVATE_KEY_SSH'
+    builders:
+        - shell:
+            !include-raw: lt-qcom-linux/builders-deps.sh
+        - shell: |
+            #!/bin/bash
+            export PS4='# ${{BASH_SOURCE}}:${{LINENO}}: ${{FUNCNAME[0]}}() - [${{SHLVL}},${{BASH_SUBSHELL}},$?] '
+            set -ex
+
+            # setup ssh for CLO
+            git config --global user.name 'Linaro CI'
+            git config --global user.email 'ci_notify@linaro.org'
+            git config --global core.sshCommand "ssh -F ${{HOME}}/qcom.sshconfig"
+
+            cat << EOF > ${{HOME}}/qcom.sshconfig
+            Host {staging_git}
+                User qclt-bot
+                StrictHostKeyChecking no
+                ServerAliveInterval 60
+                ServerAliveCountMax 5
+                TCPKeepAlive yes
+                IPQoS=throughput
+                LogLevel DEBUG3
+            EOF
+
+            cat ${{HOME}}/qcom.sshconfig
+            chmod 0600 ${{HOME}}/qcom.sshconfig
+
+            export GIT_TRACE_PACKET=true
+            export GIT_TRACE=true
+
+            # qualcomm' staging git-clone checks
+            if [ "{type}" == "ssh" ]; then
+            git clone --verbose --depth 1 git@{staging_git}:${{INTEGRATION_REPO_URL}}
+            git clone --verbose --depth 1 git@{staging_git}:${{KERNEL_CI_REPO_URL}}
+            git clone --verbose --depth 1 git@{staging_git}:${{QCOM_SECTOOLS_GIT}}
+            else
+            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{INTEGRATION_REPO_URL}}
+            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{KERNEL_CI_REPO_URL}}
+            git clone --verbose --depth 1 https://{user}:${{LT_QCOM_CLO_TOKEN}}@{staging_git}/${{QCOM_SECTOOLS_GIT}}
+            fi
+
+            # publish artifacts
+            src=${{JOB_NAME}}.${{BUILD_NUMBER}}
+            target=${{JOB_NAME}}/${{BUILD_NUMBER}}/$src
+            touch $src
+            ${{HOME}}/bin/jfrog rt u --flat=false --include-dirs=true --symlinks=true --detailed-summary --apikey ${{LT_QCOM_CLO_API_KEY}} --url ${{PUBLISH_SERVER}} $src $target
+    triggers:
+        - timed: '@hourly'
